@@ -1,28 +1,28 @@
 "use server";
 
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth/session";
+import { db } from "@/lib/db";
+import { projects } from "@/lib/db/schema";
 import type { ActionState } from "@/lib/types";
 
 export async function createProject(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const user = await requireUser();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) {
     return { error: "Project name is required." };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("projects").insert({
+  await db.insert(projects).values({
+    userId: user.id,
     name,
     description: String(formData.get("description") ?? "").trim() || null,
   });
-
-  if (error) {
-    return { error: error.message };
-  }
 
   revalidatePath("/dashboard");
   return { success: "Project created." };
@@ -32,24 +32,20 @@ export async function updateProject(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const user = await requireUser();
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (!name) {
     return { error: "Project name is required." };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("projects")
-    .update({
+  await db
+    .update(projects)
+    .set({
       name,
       description: String(formData.get("description") ?? "").trim() || null,
     })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
-  }
+    .where(and(eq(projects.id, id), eq(projects.userId, user.id)));
 
   revalidatePath("/dashboard");
   revalidatePath(`/projects/${id}`);
@@ -57,12 +53,10 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("projects").delete().eq("id", id);
-
-  if (error) {
-    return { error: error.message };
-  }
+  const user = await requireUser();
+  await db
+    .delete(projects)
+    .where(and(eq(projects.id, id), eq(projects.userId, user.id)));
 
   revalidatePath("/dashboard");
   redirect("/dashboard");

@@ -2,21 +2,23 @@ export type TodoStatus = "todo" | "in_progress" | "completed";
 
 export type Project = {
   id: string;
-  user_id: string;
+  userId: string;
   name: string;
   description: string | null;
-  created_at: string;
+  createdAt: Date;
 };
+
+export type ProjectWithCount = Project & { todoCount: number };
 
 export type Todo = {
   id: string;
-  project_id: string;
-  user_id: string;
+  projectId: string;
+  userId: string;
   title: string;
   description: string | null;
   status: TodoStatus;
-  created_at: string;
-  updated_at: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type ActionState = {

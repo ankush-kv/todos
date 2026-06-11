@@ -1,9 +1,11 @@
+import { and, asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProjectActions } from "@/components/projects/project-actions";
 import { KanbanBoard } from "@/components/todos/kanban-board";
-import { createClient } from "@/lib/supabase/server";
-import type { Project, Todo } from "@/lib/types";
+import { requireUser } from "@/lib/auth/session";
+import { db } from "@/lib/db";
+import { projects, todos } from "@/lib/db/schema";
 
 export default async function ProjectPage({
   params,
@@ -11,24 +13,20 @@ export default async function ProjectPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const user = await requireUser();
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("*")
-    .eq("id", id)
-    .single<Project>();
+  const project = await db.query.projects.findFirst({
+    where: and(eq(projects.id, id), eq(projects.userId, user.id)),
+  });
 
   if (!project) {
     notFound();
   }
 
-  const { data: todos } = await supabase
-    .from("todos")
-    .select("*")
-    .eq("project_id", id)
-    .order("created_at", { ascending: true })
-    .returns<Todo[]>();
+  const projectTodos = await db.query.todos.findMany({
+    where: and(eq(todos.projectId, id), eq(todos.userId, user.id)),
+    orderBy: asc(todos.createdAt),
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -54,7 +52,7 @@ export default async function ProjectPage({
         </div>
       </div>
 
-      <KanbanBoard todos={todos ?? []} projectId={id} />
+      <KanbanBoard todos={projectTodos} projectId={id} />
     </div>
   );
 }

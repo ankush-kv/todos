@@ -1,19 +1,29 @@
+import { count, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { NewProjectButton } from "@/components/projects/new-project-button";
 import { ProjectActions } from "@/components/projects/project-actions";
-import { createClient } from "@/lib/supabase/server";
-import type { Project } from "@/lib/types";
-
-type ProjectRow = Project & { todos: { count: number }[] };
+import { requireUser } from "@/lib/auth/session";
+import { db } from "@/lib/db";
+import { projects as projectsTable, todos } from "@/lib/db/schema";
+import type { ProjectWithCount } from "@/lib/types";
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("projects")
-    .select("*, todos(count)")
-    .order("created_at", { ascending: false });
+  const user = await requireUser();
 
-  const projects = (data ?? []) as ProjectRow[];
+  const projects: ProjectWithCount[] = await db
+    .select({
+      id: projectsTable.id,
+      userId: projectsTable.userId,
+      name: projectsTable.name,
+      description: projectsTable.description,
+      createdAt: projectsTable.createdAt,
+      todoCount: count(todos.id),
+    })
+    .from(projectsTable)
+    .leftJoin(todos, eq(todos.projectId, projectsTable.id))
+    .where(eq(projectsTable.userId, user.id))
+    .groupBy(projectsTable.id)
+    .orderBy(desc(projectsTable.createdAt));
 
   return (
     <div className="flex flex-col gap-6">
@@ -57,8 +67,8 @@ export default async function DashboardPage() {
                 </p>
               ) : null}
               <p className="mt-auto text-xs text-zinc-400 dark:text-zinc-500">
-                {project.todos[0]?.count ?? 0} todo
-                {(project.todos[0]?.count ?? 0) === 1 ? "" : "s"}
+                {project.todoCount} todo
+                {project.todoCount === 1 ? "" : "s"}
               </p>
             </div>
           ))}

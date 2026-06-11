@@ -1,39 +1,11 @@
-import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./lib/supabase/env";
+import { SESSION_COOKIE, verifySession } from "./lib/auth/jwt";
 
-const AUTH_PATHS = [
-  "/login",
-  "/register",
-  "/forgot-password",
-  "/reset-password",
-];
+const AUTH_PATHS = ["/login", "/register"];
 
 export async function proxy(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
-
-  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        for (const { name, value } of cookiesToSet) {
-          request.cookies.set(name, value);
-        }
-        supabaseResponse = NextResponse.next({ request });
-        for (const { name, value, options } of cookiesToSet) {
-          supabaseResponse.cookies.set(name, value, options);
-        }
-      },
-    },
-  });
-
-  // Refresh the session if needed. Do not run code between client creation
-  // and getUser() — it can cause random logouts.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const session = token ? await verifySession(token) : null;
 
   const path = request.nextUrl.pathname;
   const isAuthPath = AUTH_PATHS.some((p) => path.startsWith(p));
@@ -42,24 +14,18 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = pathname;
     url.search = "";
-    const response = NextResponse.redirect(url);
-    // Carry over any refreshed auth cookies.
-    for (const cookie of supabaseResponse.cookies.getAll()) {
-      response.cookies.set(cookie);
-    }
-    return response;
+    return NextResponse.redirect(url);
   };
 
-  if (!user && !isAuthPath && !path.startsWith("/auth")) {
+  if (!session && !isAuthPath) {
     return redirectTo("/login");
   }
 
-  // /reset-password is reached with a session from the recovery email link.
-  if (user && isAuthPath && !path.startsWith("/reset-password")) {
+  if (session && isAuthPath) {
     return redirectTo("/dashboard");
   }
 
-  return supabaseResponse;
+  return NextResponse.next();
 }
 
 export const config = {

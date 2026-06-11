@@ -7,12 +7,4 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
-export const SUPABASE_URL = required(
-  "NEXT_PUBLIC_SUPABASE_URL",
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-);
-
-export const SUPABASE_ANON_KEY = required(
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-);
+export const DATABASE_URL = required("DATABASE_URL", process.env.DATABASE_URL);

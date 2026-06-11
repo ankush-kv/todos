@@ -1,31 +1,40 @@
 "use server";
 
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { createSession, destroySession } from "@/lib/auth/session";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
 import type { ActionState } from "@/lib/types";
 
-async function getOrigin() {
-  const headerStore = await headers();
-  return headerStore.get("origin") ?? "http://localhost:3000";
+function normalizeEmail(value: FormDataEntryValue | null): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 export async function login(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await createClient();
+  const email = normalizeEmail(formData.get("email"));
+  const password = String(formData.get("password") ?? "");
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email: String(formData.get("email") ?? ""),
-    password: String(formData.get("password") ?? ""),
-  });
-
-  if (error) {
-    return { error: error.message };
+  if (!email || !password) {
+    return { error: "Email and password are required." };
   }
 
+  const user = await db.query.users.findFirst({
+    where: eq(users.email, email),
+  });
+
+  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+    return { error: "Invalid email or password." };
+  }
+
+  await createSession({ id: user.id, email: user.email });
   revalidatePath("/", "layout");
   redirect("/dashboard");
 }
@@ -34,76 +43,36 @@ export async function register(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const supabase = await createClient();
-  const origin = await getOrigin();
+  const email = normalizeEmail(formData.get("email"));
+  const password = String(formData.get("password") ?? "");
 
-  const { data, error } = await supabase.auth.signUp({
-    email: String(formData.get("email") ?? ""),
-    password: String(formData.get("password") ?? ""),
-    options: { emailRedirectTo: `${origin}/auth/confirm` },
-  });
-
-  if (error) {
-    return { error: error.message };
+  if (!email || !password) {
+    return { error: "Email and password are required." };
+  }
+  if (password.length < 8) {
+    return { error: "Password must be at least 8 characters." };
   }
 
-  // Supabase returns a user with no identities when the email is already registered.
-  if (data.user && data.user.identities?.length === 0) {
+  const existing = await db.query.users.findFirst({
+    where: eq(users.email, email),
+  });
+  if (existing) {
     return { error: "An account with this email already exists." };
   }
 
-  if (data.session) {
-    revalidatePath("/", "layout");
-    redirect("/dashboard");
-  }
+  const passwordHash = await hashPassword(password);
+  const [user] = await db
+    .insert(users)
+    .values({ email, passwordHash })
+    .returning({ id: users.id, email: users.email });
 
-  return { success: "Check your email for a confirmation link." };
-}
-
-export async function forgotPassword(
-  _prevState: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  const supabase = await createClient();
-  const origin = await getOrigin();
-
-  const { error } = await supabase.auth.resetPasswordForEmail(
-    String(formData.get("email") ?? ""),
-    { redirectTo: `${origin}/auth/confirm?next=/reset-password` },
-  );
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  return { success: "Check your email for a password reset link." };
-}
-
-export async function resetPassword(
-  _prevState: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  const password = String(formData.get("password") ?? "");
-  const confirm = String(formData.get("confirm") ?? "");
-
-  if (password !== confirm) {
-    return { error: "Passwords do not match." };
-  }
-
-  const supabase = await createClient();
-  const { error } = await supabase.auth.updateUser({ password });
-
-  if (error) {
-    return { error: error.message };
-  }
-
+  await createSession({ id: user.id, email: user.email });
   revalidatePath("/", "layout");
   redirect("/dashboard");
 }
 
 export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  await destroySession();
   revalidatePath("/", "layout");
   redirect("/login");
 }
