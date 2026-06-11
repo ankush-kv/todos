@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Todos",
-  description: "Todos app",
+  title: {
+    default: "Todos",
+    template: "%s · Todos",
+  },
+  description: "Organize your projects and todos on a simple kanban board.",
 };
 
 export default function RootLayout({
