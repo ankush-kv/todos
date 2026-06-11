@@ -2,7 +2,6 @@
 
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
@@ -24,7 +23,7 @@ export async function createProject(
     description: String(formData.get("description") ?? "").trim() || null,
   });
 
-  revalidatePath("/dashboard");
+  revalidatePath("/");
   return { success: "Project created." };
 }
 
@@ -47,8 +46,7 @@ export async function updateProject(
     })
     .where(and(eq(projects.id, id), eq(projects.userId, user.id)));
 
-  revalidatePath("/dashboard");
-  revalidatePath(`/projects/${id}`);
+  revalidatePath("/");
   return { success: "Project updated." };
 }
 
@@ -58,6 +56,5 @@ export async function deleteProject(id: string) {
     .delete(projects)
     .where(and(eq(projects.id, id), eq(projects.userId, user.id)));
 
-  revalidatePath("/dashboard");
-  redirect("/dashboard");
+  revalidatePath("/");
 }

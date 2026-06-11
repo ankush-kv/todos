@@ -1,5 +1,12 @@
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import type { TodoStatus } from "@/lib/types";
+import {
+  date,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+import type { TodoPriority, TodoStatus } from "@/lib/types";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -39,6 +46,11 @@ export const todos = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     status: text("status").notNull().default("todo").$type<TodoStatus>(),
+    priority: text("priority")
+      .notNull()
+      .default("medium")
+      .$type<TodoPriority>(),
+    dueDate: date("due_date"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

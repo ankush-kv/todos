@@ -12,7 +12,7 @@ export default async function AppLayout({
     <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
       <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
-          <Link href="/dashboard" aria-label="Todos home">
+          <Link href="/" aria-label="Todos home">
             <Logo />
           </Link>
           <div className="flex items-center gap-4">

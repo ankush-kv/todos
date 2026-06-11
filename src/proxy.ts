@@ -22,7 +22,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (session && isAuthPath) {
-    return redirectTo("/dashboard");
+    return redirectTo("/");
   }
 
   return NextResponse.next();

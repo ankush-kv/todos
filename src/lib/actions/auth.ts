@@ -36,7 +36,7 @@ export async function login(
 
   await createSession({ id: user.id, email: user.email });
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  redirect("/");
 }
 
 export async function register(
@@ -68,7 +68,7 @@ export async function register(
 
   await createSession({ id: user.id, email: user.email });
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  redirect("/");
 }
 
 export async function signOut() {

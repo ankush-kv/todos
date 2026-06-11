@@ -1,10 +1,17 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import { TodoForm } from "@/components/todos/todo-form";
 import { Modal } from "@/components/ui/modal";
 import { deleteTodo, updateTodoStatus } from "@/lib/actions/todos";
-import type { Todo, TodoStatus } from "@/lib/types";
+import {
+  formatDueDate,
+  isOverdue,
+  PRIORITY_BADGE,
+  PRIORITY_LABEL,
+  todayISO,
+} from "@/lib/todo-meta";
+import type { Project, Todo, TodoStatus } from "@/lib/types";
 
 const COLUMNS: { status: TodoStatus; title: string; dot: string }[] = [
   { status: "todo", title: "Todo", dot: "bg-zinc-400" },
@@ -14,10 +21,10 @@ const COLUMNS: { status: TodoStatus; title: string; dot: string }[] = [
 
 export function KanbanBoard({
   todos,
-  projectId,
+  projects,
 }: {
   todos: Todo[];
-  projectId: string;
+  projects: Project[];
 }) {
   const [optimisticTodos, applyStatus] = useOptimistic(
     todos,
@@ -29,17 +36,23 @@ export function KanbanBoard({
   const [editing, setEditing] = useState<Todo | null>(null);
   const [dragOver, setDragOver] = useState<TodoStatus | null>(null);
 
+  const today = todayISO();
+  const projectNames = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.name])),
+    [projects],
+  );
+
   const moveTodo = (id: string, status: TodoStatus) => {
     startTransition(async () => {
       applyStatus({ id, status });
-      await updateTodoStatus(id, projectId, status);
+      await updateTodoStatus(id, status);
     });
   };
 
   const removeTodo = (todo: Todo) => {
     if (window.confirm(`Delete todo "${todo.title}"?`)) {
       startTransition(async () => {
-        await deleteTodo(todo.id, projectId);
+        await deleteTodo(todo.id);
       });
     }
   };
@@ -96,85 +109,114 @@ export function KanbanBoard({
               </div>
 
               <div className="flex min-h-24 flex-col gap-2">
-                {columnTodos.map((todo) => (
-                  <article
-                    key={todo.id}
-                    draggable
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData("text/plain", todo.id);
-                      event.dataTransfer.effectAllowed = "move";
-                    }}
-                    className="group cursor-grab rounded-xl border border-zinc-200 bg-zinc-50 p-3 active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-800"
-                  >
-                    <div className="flex items-start gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          moveTodo(
-                            todo.id,
-                            todo.status === "completed" ? "todo" : "completed",
-                          )
-                        }
-                        aria-label={
-                          todo.status === "completed"
-                            ? "Mark as not completed"
-                            : "Mark as completed"
-                        }
-                        className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                          todo.status === "completed"
-                            ? "border-green-500 bg-green-500 text-white"
-                            : "border-zinc-400 hover:border-green-500 dark:border-zinc-500"
-                        }`}
-                      >
-                        {todo.status === "completed" ? (
-                          <svg
-                            aria-hidden="true"
-                            width="10"
-                            height="10"
-                            viewBox="0 0 10 10"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                          >
-                            <path d="M2 5l2 2 4-4" />
-                          </svg>
-                        ) : null}
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className={`text-sm font-medium ${
+                {columnTodos.map((todo) => {
+                  const overdue =
+                    todo.status !== "completed" &&
+                    isOverdue(todo.dueDate, today);
+
+                  return (
+                    <article
+                      key={todo.id}
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData("text/plain", todo.id);
+                        event.dataTransfer.effectAllowed = "move";
+                      }}
+                      className="group cursor-grab rounded-xl border border-zinc-200 bg-zinc-50 p-3 active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-800"
+                    >
+                      <div className="flex items-start gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            moveTodo(
+                              todo.id,
+                              todo.status === "completed"
+                                ? "todo"
+                                : "completed",
+                            )
+                          }
+                          aria-label={
                             todo.status === "completed"
-                              ? "text-zinc-400 line-through dark:text-zinc-500"
-                              : "text-zinc-900 dark:text-zinc-50"
+                              ? "Mark as not completed"
+                              : "Mark as completed"
+                          }
+                          className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                            todo.status === "completed"
+                              ? "border-green-500 bg-green-500 text-white"
+                              : "border-zinc-400 hover:border-green-500 dark:border-zinc-500"
                           }`}
                         >
-                          {todo.title}
-                        </p>
-                        {todo.description ? (
-                          <p className="mt-1 line-clamp-3 text-xs text-zinc-500 dark:text-zinc-400">
-                            {todo.description}
+                          {todo.status === "completed" ? (
+                            <svg
+                              aria-hidden="true"
+                              width="10"
+                              height="10"
+                              viewBox="0 0 10 10"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                            >
+                              <path d="M2 5l2 2 4-4" />
+                            </svg>
+                          ) : null}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={`text-sm font-medium ${
+                              todo.status === "completed"
+                                ? "text-zinc-400 line-through dark:text-zinc-500"
+                                : "text-zinc-900 dark:text-zinc-50"
+                            }`}
+                          >
+                            {todo.title}
                           </p>
-                        ) : null}
+                          {todo.description ? (
+                            <p className="mt-1 line-clamp-3 text-xs text-zinc-500 dark:text-zinc-400">
+                              {todo.description}
+                            </p>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <span className="rounded-md bg-zinc-200 px-1.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                              {projectNames.get(todo.projectId) ?? "Project"}
+                            </span>
+                            <span
+                              className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${PRIORITY_BADGE[todo.priority]}`}
+                            >
+                              {PRIORITY_LABEL[todo.priority]}
+                            </span>
+                            {todo.dueDate ? (
+                              <span
+                                className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
+                                  overdue
+                                    ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+                                    : "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+                                }`}
+                              >
+                                {formatDueDate(todo.dueDate)}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="mt-2 flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <button
-                        type="button"
-                        onClick={() => setEditing(todo)}
-                        className="rounded-md px-2 py-0.5 text-xs font-medium text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-50"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeTodo(todo)}
-                        className="rounded-md px-2 py-0.5 text-xs font-medium text-zinc-500 hover:bg-zinc-200 hover:text-red-600 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-red-400"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                      <div className="mt-2 flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(todo)}
+                          className="rounded-md px-2 py-0.5 text-xs font-medium text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-50"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeTodo(todo)}
+                          className="rounded-md px-2 py-0.5 text-xs font-medium text-zinc-500 hover:bg-zinc-200 hover:text-red-600 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-red-400"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
                 {columnTodos.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-zinc-200 p-3 text-center text-xs text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
                     Drop todos here
@@ -192,7 +234,7 @@ export function KanbanBoard({
         title="New todo"
       >
         <TodoForm
-          projectId={projectId}
+          projects={projects}
           defaultStatus={creatingIn ?? "todo"}
           onDone={() => setCreatingIn(null)}
         />
@@ -205,7 +247,7 @@ export function KanbanBoard({
       >
         {editing ? (
           <TodoForm
-            projectId={projectId}
+            projects={projects}
             todo={editing}
             onDone={() => setEditing(null)}
           />
