@@ -26,17 +26,26 @@ export async function login(
     return { error: "Email and password are required." };
   }
 
-  const user = await db.query.users.findFirst({
-    where: eq(users.email, email),
-  });
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.email, email),
+    });
 
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
-    return { error: "Invalid email or password." };
+    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+      return { error: "Invalid email or password." };
+    }
+
+    await createSession({ id: user.id, email: user.email });
+    revalidatePath("/", "layout");
+    redirect("/");
+  } catch (error: unknown) {
+    // redirect() works by throwing a special error — let it propagate.
+    if (error instanceof Error && error.message === "NEXT_REDIRECT") {
+      throw error;
+    }
+    console.error("[login] Unhandled error:", error);
+    return { error: "Something went wrong. Please try again." };
   }
-
-  await createSession({ id: user.id, email: user.email });
-  revalidatePath("/", "layout");
-  redirect("/");
 }
 
 export async function register(
