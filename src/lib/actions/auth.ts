@@ -44,7 +44,8 @@ export async function login(
       throw error;
     }
     console.error("[login] Unhandled error:", error);
-    return { error: "Something went wrong. Please try again." };
+    const errMessage = error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
+    return { error: `Unhandled error: ${errMessage}` };
   }
 }
 
